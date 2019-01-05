@@ -4,6 +4,7 @@ import java.util.Scanner;
 public class Main{
     private static GeografijaDAO baza = GeografijaDAO.getInstance();
 
+    
     public static void main(String[] args) {
         System.out.println("1) Ispis gradova");
         System.out.println("2) Ispis glavnog grada");
