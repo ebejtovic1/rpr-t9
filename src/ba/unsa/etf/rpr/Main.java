@@ -1,26 +1,39 @@
 package ba.unsa.etf.rpr;
+
+import javafx.application.Application;
+import javafx.fxml.FXMLLoader;
+import javafx.scene.Parent;
+import javafx.scene.Scene;
+import javafx.scene.image.Image;
+import javafx.stage.Stage;
+
+import java.util.ResourceBundle;
 import java.util.Scanner;
 
-public class Main{
+import static javafx.scene.layout.Region.USE_COMPUTED_SIZE;
+
+public class Main extends Application {
     private static GeografijaDAO baza = GeografijaDAO.getInstance();
 
-    public static void main(String[] args) {
-        System.out.println("1) Ispis gradova");
-        System.out.println("2) Ispis glavnog grada");
-        System.out.print("Ulaz: ");
-        Scanner ulaz = new Scanner(System.in);
-        int izbor = ulaz.nextInt();
-        switch (izbor) {
-            case 1:
-                System.out.println("Gradovi su:\n" + ispisiGradove());
-                break;
-            case 2:
-                System.out.print("Unesite naziv drzave: ");
-                glavniGrad();
-                break;
-        }
+    @Override
+    public void start(Stage primaryStage) throws Exception {
+        ResourceBundle bundle = ResourceBundle.getBundle("Translation");
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("window.fxml"), bundle);
+        DrzavaModel drzavaModel = new DrzavaModel(baza);
+        GradModel gradModel = new GradModel(baza);
+        loader.setController(new WindowController(baza, drzavaModel, gradModel, bundle));
+        Parent root = loader.load();
+        primaryStage.setTitle(bundle.getString("bazaPodataka"));
+        primaryStage.getIcons().add(new Image("icon.png"));
+        primaryStage.setResizable(false);
+        primaryStage.setScene(new Scene(root, USE_COMPUTED_SIZE, USE_COMPUTED_SIZE));
+        primaryStage.show();
     }
 
+
+    public static void main(String[] args) {
+        launch(args);
+    }
 
     private static void glavniGrad() {
         Scanner ulaz = new Scanner(System.in);

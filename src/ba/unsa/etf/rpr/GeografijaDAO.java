@@ -5,8 +5,12 @@ import java.util.ArrayList;
 
 public class GeografijaDAO {
     private static GeografijaDAO instance = null;
-    private Connection conn;
+    private static Connection conn;
     private PreparedStatement upit;
+
+    public Connection getConn() {
+        return conn;
+    }
 
     private static void initialize() {
         instance = new GeografijaDAO();
@@ -42,61 +46,61 @@ public class GeografijaDAO {
         napuniPodacima(gradovi, drzave);
 
         try {
-            String url = "jdbc:oracle:thin:@ora.db.lab.ri.etf.unsa.ba:1521:ETFLAB";
-            String username = "FP18120";
-            String password = "dsmLP88q";
-            conn = DriverManager.getConnection(url, username, password);
+            String url = "jdbc:sqlite:" + System.getProperty("user.dir") + "\\baza.db";
+            conn = DriverManager.getConnection(url);
+            upit = conn.prepareStatement("PRAGMA foreign_keys = ON");
+            upit.executeUpdate();
             //Izbrisi sve iz baze
-            boolean gradTabelaPostoji = true;
+            boolean gradTabelaPostoji = true, drzavaTabelaPostoji = true;
             try {
-                upit = conn.prepareStatement("DELETE FROM grad");
-                upit.executeUpdate();
-            } catch (Exception ignored) {
-                //Tabela gradova vjerovatno ne postoji
-                upit = conn.prepareStatement("create table grad (id int constraint grad_id_pk primary key, naziv varchar(50), broj_stanovnika int, drzava int)");
-                upit.executeUpdate();
+                upit = conn.prepareStatement("SELECT 'x' FROM grad");
+                upit.executeQuery();
+            } catch (SQLException ignored) {
                 gradTabelaPostoji = false;
             }
             try {
-                upit = conn.prepareStatement("DELETE FROM drzava");
-                upit.executeUpdate();
-            } catch (Exception ignored) {
-                //Tabela drzava vjerovatno ne postoji
-                upit = conn.prepareStatement("create table drzava (id int constraint drzava_id_pk primary key, naziv varchar(50), glavni_grad int constraint gl_grad_fk references grad(id) on delete cascade)");
-                upit.executeUpdate();
-                if (!gradTabelaPostoji) {
-                    upit = conn.prepareStatement("alter table grad add constraint drzava_fk foreign key (drzava) references drzava(id) on delete cascade");
-                    upit.executeUpdate();
-                }
+                upit = conn.prepareStatement("SELECT 'x' FROM drzava");
+                upit.executeQuery();
+            } catch (SQLException ignored) {
+                drzavaTabelaPostoji = false;
             }
 
-            upit = conn.prepareStatement("INSERT INTO grad VALUES (?, ?, ?, NULL)");
-            for (var grad : gradovi) {
-                try {
-                    upit.setInt(1, grad.getIdGrad());
-                    upit.setString(2, grad.getNazivGrad());
-                    upit.setInt(3, grad.getBrojStanovnika());
-                    upit.executeUpdate();
-                } catch (SQLException ignored) {
+            if (!gradTabelaPostoji || !drzavaTabelaPostoji) {
+                //Tabela gradova vjerovatno ne postoji
+                upit = conn.prepareStatement("create table grad (id int constraint grad_id_pk primary key, naziv varchar(50), broj_stanovnika int, drzava int constraint drzava_fk references drzava(id) on delete cascade)");
+                upit.execute();
+                //Tabela drzava vjerovatno ne postoji
+                upit = conn.prepareStatement("create table drzava (id int constraint drzava_id_pk primary key, naziv varchar(50), glavni_grad int constraint gl_grad_fk references grad(id) on delete cascade)");
+                upit.execute();
+
+                upit = conn.prepareStatement("INSERT INTO grad VALUES (?, ?, ?, NULL)");
+                for (var grad : gradovi) {
+                    try {
+                        upit.setInt(1, grad.getIdGrad());
+                        upit.setString(2, grad.getNazivGrad());
+                        upit.setInt(3, grad.getBrojStanovnika());
+                        upit.executeUpdate();
+                    } catch (SQLException ignored) {
+                    }
                 }
-            }
-            upit = conn.prepareStatement("INSERT  INTO drzava VALUES(?, ?, ?)");
-            for (var drzava : drzave) {
-                try {
-                    upit.setInt(1, drzava.getIdDrzava());
-                    upit.setString(2, drzava.getNazivDrzave());
-                    upit.setInt(3, drzava.getGlavniGrad().getIdGrad());
-                    upit.executeUpdate();
-                } catch (SQLException ignored) {
+                upit = conn.prepareStatement("INSERT  INTO drzava VALUES(?, ?, ?)");
+                for (var drzava : drzave) {
+                    try {
+                        upit.setInt(1, drzava.getIdDrzava());
+                        upit.setString(2, drzava.getNazivDrzave());
+                        upit.setInt(3, drzava.getGlavniGrad().getIdGrad());
+                        upit.executeUpdate();
+                    } catch (SQLException ignored) {
+                    }
                 }
-            }
-            upit = conn.prepareStatement("UPDATE grad SET drzava = ? WHERE id = ?");
-            for (var grad : gradovi) {
-                try {
-                    upit.setInt(1, grad.getDrzava().getIdDrzava());
-                    upit.setInt(2, grad.getIdGrad());
-                    upit.executeUpdate();
-                } catch (SQLException ignored) {
+                upit = conn.prepareStatement("UPDATE grad SET drzava = ? WHERE id = ?");
+                for (var grad : gradovi) {
+                    try {
+                        upit.setInt(1, grad.getDrzava().getIdDrzava());
+                        upit.setInt(2, grad.getIdGrad());
+                        upit.executeUpdate();
+                    } catch (SQLException ignored) {
+                    }
                 }
             }
         } catch (SQLException greska) {
@@ -105,6 +109,12 @@ public class GeografijaDAO {
     }
 
     public static void removeInstance() {
+        try {
+            if (conn != null)
+                conn.close();
+        } catch (SQLException ignored) {
+
+        }
         instance = null;
     }
 
@@ -116,19 +126,6 @@ public class GeografijaDAO {
 
     public void obrisiDrzavu(String drzava) {
         try {
-            upit = conn.prepareStatement("SELECT g.id FROM grad g, drzava d WHERE g.drzava = d.id AND d.naziv = ?");
-            upit.setString(1, drzava);
-            ResultSet result = upit.executeQuery();
-            int brojac = 0;
-            while (result.next()) {
-                int idGrad = result.getInt(1);
-                PreparedStatement podUpit = conn.prepareStatement("DELETE FROM grad WHERE id = ?");
-                podUpit.setInt(1, idGrad);
-                podUpit.executeUpdate();
-                brojac++;
-            }
-            if (brojac == 0)
-                return;
             upit = conn.prepareStatement("DELETE FROM drzava WHERE naziv = ?");
             upit.setString(1, drzava);
             upit.executeUpdate();
@@ -139,19 +136,6 @@ public class GeografijaDAO {
 
     public void obrisiGrad(String grad) {
         try {
-            upit = conn.prepareStatement("SELECT d.id FROM grad g, drzava d WHERE d.glavni_grad = g.id AND g.naziv = ?");
-            upit.setString(1, grad);
-            ResultSet result = upit.executeQuery();
-            int brojac = 0;
-            while (result.next()) {
-                int idDrzava = result.getInt(1);
-                PreparedStatement podUpit = conn.prepareStatement("DELETE FROM drzava WHERE id = ?");
-                podUpit.setInt(1, idDrzava);
-                podUpit.executeUpdate();
-                brojac++;
-            }
-            if (brojac == 0)
-                return;
             upit = conn.prepareStatement("DELETE FROM grad WHERE naziv = ?");
             upit.setString(1, grad);
             upit.executeUpdate();
@@ -296,7 +280,8 @@ public class GeografijaDAO {
     }
 
     private int dajSljedeciID(String nazivTabele) throws SQLException {
-        upit = conn.prepareStatement("SELECT id FROM " + nazivTabele + " WHERE ROWNUM = 1 ORDER BY id DESC");
+        //upit = conn.prepareStatement("SELECT id FROM " + nazivTabele + " WHERE ROWNUM = 1 ORDER BY id DESC");
+        upit = conn.prepareStatement("SELECT id FROM " + nazivTabele + " ORDER BY id DESC LIMIT 1");
         var result = upit.executeQuery();
         int id = 0;
         while (result.next())
